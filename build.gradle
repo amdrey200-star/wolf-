@@ -11,9 +11,15 @@ base {
 }
 
 repositories {
-    maven {
-        name = "Nucleoid"
-        url = 'https://maven.nucleoid.xyz/releases'
+    maven { name = "Fabric"; url = "https://maven.fabricmc.net/" }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter { includeGroup "maven.modrinth" }
     }
 }
 
@@ -22,8 +28,8 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation "eu.pb4:trinkets:${project.trinkets_version}"
-    include "eu.pb4:trinkets:${project.trinkets_version}"
+    modImplementation "maven.modrinth:XaT8sLP6:DHE2OnLP"
+    include "maven.modrinth:XaT8sLP6:DHE2OnLP"
 }
 
 processResources {
