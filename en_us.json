@@ -1,0 +1,67 @@
+package com.wolfarmor.mixin;
+
+import com.wolfarmor.WolfArmorTrinket;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+/**
+ * Intercepts LivingEntity#hurt (the central damage method) to implement
+ * wolf-armor immortality for players.
+ *
+ * How it works:
+ *   1. The injection fires just before vanilla would reduce the player's health.
+ *   2. We check whether this player has wolf armor in their special trinket slot
+ *      AND the armor still has durability.
+ *   3. If yes:
+ *        a. We consume durability on the armor equal to (damage rounded up, min 1).
+ *           This mirrors how wolf armor absorbs hits on tamed wolves.
+ *        b. We cancel the damage entirely — the player stays at their current HP.
+ *   4. If the wolf armor is gone (broken or unequipped), damage proceeds normally.
+ *
+ * The injection target "HEAD" means we fire before ANY vanilla damage logic,
+ * so the player truly cannot die while the armor has durability.
+ */
+@Mixin(LivingEntity.class)
+public abstract class LivingEntityMixin {
+
+    @Inject(
+            method = "hurt(Lnet/minecraft/world/damagesource/DamageSource;F)Z",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void wolfArmor_interceptDamage(DamageSource source, float amount,
+                                           CallbackInfoReturnable<Boolean> cir) {
+
+        // Only apply to players (not wolves, zombies, etc.)
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!(self instanceof Player player)) return;
+
+        // Skip on the client — damage logic runs server-side
+        if (player.level().isClientSide()) return;
+
+        // Get the wolf armor from the trinket slot
+        ItemStack wolfArmor = WolfArmorTrinket.getEquippedWolfArmor(player);
+        if (wolfArmor.isEmpty()) return; // No armor equipped — normal damage
+
+        // Check the armor still has durability
+        if (wolfArmor.getDamageValue() >= wolfArmor.getMaxDamage()) {
+            // Armor is already fully broken somehow — let damage through
+            return;
+        }
+
+        // Convert hit into durability damage (at least 1 point per hit,
+        // scaled by how hard the hit was — same feel as wolf armor on wolves).
+        int durabilityDrain = Math.max(1, Math.round(amount));
+        WolfArmorTrinket.damageWolfArmor(player, wolfArmor, durabilityDrain);
+
+        // Cancel the actual health damage — player is immortal while armor lives
+        cir.setReturnValue(false);
+        cir.cancel();
+    }
+}

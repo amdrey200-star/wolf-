@@ -1,0 +1,95 @@
+package com.wolfarmor;
+
+import eu.pb4.trinkets.api.SlotReference;
+import eu.pb4.trinkets.api.Trinket;
+import eu.pb4.trinkets.api.TrinketEnums;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+
+/**
+ * Governs what happens when Wolf Armor sits in the player's special wolf-armor slot.
+ *
+ * Immortality mechanic (mirrors how wolves work with wolf armor):
+ *   - When the player would take damage, the mixin intercepts the hit BEFORE health is subtracted.
+ *   - If wolf armor is present and still has durability, the hit is converted into a durability drain
+ *     on the armor item and the player's health is clamped at 1 HP — they survive no matter what.
+ *   - Once the armor's durability reaches 0 it breaks (item removed), and the player is mortal again.
+ *
+ * The actual damage interception lives in LivingEntityMixin; this class handles
+ * equip/unequip side-effects and slot policy.
+ */
+public class WolfArmorTrinket implements Trinket {
+
+    // ── Slot policy ──────────────────────────────────────────────────────────
+
+    /** Only wolf_armor items belong in this slot. */
+    @Override
+    public boolean canEquip(ItemStack stack, SlotReference slot, LivingEntity entity) {
+        return stack.is(Items.WOLF_ARMOR);
+    }
+
+    /** On equip, log and optionally trigger any visual/sound effects here. */
+    @Override
+    public void onEquip(ItemStack stack, SlotReference slot, LivingEntity entity) {
+        if (entity instanceof Player player && !player.level().isClientSide()) {
+            WolfArmorSlotMod.LOGGER.info("[WolfArmorSlot] {} equipped wolf armor — now immortal.",
+                    player.getName().getString());
+        }
+    }
+
+    /** On unequip (or break), log the loss of immortality. */
+    @Override
+    public void onUnequip(ItemStack stack, SlotReference slot, LivingEntity entity) {
+        if (entity instanceof Player player && !player.level().isClientSide()) {
+            WolfArmorSlotMod.LOGGER.info("[WolfArmorSlot] {} lost wolf armor protection.",
+                    player.getName().getString());
+        }
+    }
+
+    /**
+     * Drop the armor on death like any other piece of equipment.
+     * (Immortality means the player normally won't die while the armor survives,
+     * but if it breaks just before the lethal hit they can still die.)
+     */
+    @Override
+    public TrinketEnums.DropRule getDropRule(ItemStack stack, SlotReference slot, LivingEntity entity) {
+        return TrinketEnums.DropRule.DEFAULT;
+    }
+
+    // ── Static helpers (called from LivingEntityMixin) ───────────────────────
+
+    /**
+     * Returns the wolf armor ItemStack currently in the player's wolf-armor trinket slot,
+     * or {@link ItemStack#EMPTY} if the slot is empty.
+     */
+    public static ItemStack getEquippedWolfArmor(Player player) {
+        var component = eu.pb4.trinkets.api.TrinketsApi.getTrinketComponent(player);
+        if (component.isEmpty()) return ItemStack.EMPTY;
+
+        // getEquipped returns a list of (SlotRef, ItemStack) pairs matching the predicate
+        var equipped = component.get().getEquipped(s -> s.is(Items.WOLF_ARMOR));
+        if (equipped.isEmpty()) return ItemStack.EMPTY;
+        return equipped.get(0).getSecond();
+    }
+
+    /**
+     * Damages the wolf armor item by {@code amount} durability points.
+     * If the item breaks it is replaced with an empty stack in the slot,
+     * and a break sound is played.
+     *
+     * @param player the player wearing the armor
+     * @param stack  the wolf armor ItemStack (must be the live stack from the slot)
+     * @param amount durability to consume
+     */
+    public static void damageWolfArmor(Player player, ItemStack stack, int amount) {
+        if (!(player instanceof ServerPlayer serverPlayer)) return;
+
+        // hurtAndBreak reduces durability; if it returns true the item just broke.
+        stack.hurtAndBreak(amount, serverPlayer, LivingEntity.getSlotForHand(net.minecraft.world.InteractionHand.MAIN_HAND));
+        // Note: hurtAndBreak automatically empties the stack and plays the break sound/particles
+        // when durability hits 0, because ItemStack handles that internally.
+    }
+}
