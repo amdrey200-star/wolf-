@@ -17,7 +17,3 @@ jobs:
         with:
           name: wolf-armor-slot
           path: wolf-armor-slot/build/libs/*.jar
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wolf-armor-slot
-          path: build/libs/*.jar
