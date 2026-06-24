@@ -1,25 +1,44 @@
-package com.wolfarmor;
+plugins {
+    id 'fabric-loom' version '1.9-SNAPSHOT'
+    id 'maven-publish'
+}
 
-import eu.pb4.trinkets.api.TrinketsApi;
-import net.fabricmc.api.ModInitializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+version = project.mod_version
+group = project.maven_group
 
-public class WolfArmorSlotMod implements ModInitializer {
+base {
+    archivesName = project.archives_base_name
+}
 
-    public static final String MOD_ID = "wolfarmor";
-    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-
-    @Override
-    public void onInitialize() {
-        LOGGER.info("[WolfArmorSlot] Initialising — wolf armor immortality active.");
-
-        // Register our Trinket implementation for wolf_armor items.
-        // TrinketsApi.registerTrinket maps an Item → Trinket behaviour object.
-        // The actual damage-interception is done in LivingEntityMixin.
-        TrinketsApi.registerTrinket(
-                net.minecraft.world.item.Items.WOLF_ARMOR,
-                new WolfArmorTrinket()
-        );
+repositories {
+    maven {
+        name = "Nucleoid"
+        url = 'https://maven.nucleoid.xyz/releases'
     }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modImplementation "eu.pb4:trinkets:${project.trinkets_version}"
+    include "eu.pb4:trinkets:${project.trinkets_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
